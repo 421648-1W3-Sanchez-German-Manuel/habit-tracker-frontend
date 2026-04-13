@@ -2,11 +2,13 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { authService } from '../services/authService';
+import { userService } from '../services/userService';
 import { isApiError } from '../types/api';
-import type { AuthState, LoginRequest } from '../types/auth';
+import type { AuthState, LoginRequest, UserProfile } from '../types/auth';
 
 interface AuthStore extends AuthState {
   login: (payload: LoginRequest) => Promise<boolean>;
+  fetchCurrentUser: () => Promise<UserProfile | null>;
   logout: () => Promise<void>;
   clearError: () => void;
   setHasHydrated: (value: boolean) => void;
@@ -27,8 +29,9 @@ const secureStorage: StateStorage = {
 
 export const useAuthStore = create<AuthStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
+      user: null,
       isAuthenticated: false,
       loading: false,
       error: null,
@@ -44,8 +47,11 @@ export const useAuthStore = create<AuthStore>()(
 
         try {
           const response = await authService.login(payload);
+          const user = await userService.getCurrentUserFromToken(response.token);
+
           set({
             token: response.token,
+            user,
             isAuthenticated: true,
             loading: false,
             error: null,
@@ -58,6 +64,7 @@ export const useAuthStore = create<AuthStore>()(
 
           set({
             token: null,
+            user: null,
             isAuthenticated: false,
             loading: false,
             error: message,
@@ -65,9 +72,21 @@ export const useAuthStore = create<AuthStore>()(
           return false;
         }
       },
+      fetchCurrentUser: async () => {
+        const token = get().token;
+
+        if (!token) {
+          return null;
+        }
+
+        const user = await userService.getCurrentUserFromToken(token);
+        set({ user });
+        return user;
+      },
       logout: async () => {
         set({
           token: null,
+          user: null,
           isAuthenticated: false,
           error: null,
         });
@@ -78,6 +97,7 @@ export const useAuthStore = create<AuthStore>()(
       storage: createJSONStorage(() => secureStorage),
       partialize: (state) => ({
         token: state.token,
+        user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state, error) => {

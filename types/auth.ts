@@ -7,8 +7,15 @@ export interface LoginResponse {
   token: string;
 }
 
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string;
+}
+
 export interface AuthState {
   token: string | null;
+  user: UserProfile | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;

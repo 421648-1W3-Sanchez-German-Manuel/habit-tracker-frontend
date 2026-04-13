@@ -5,6 +5,8 @@ import { Input } from '../components/Input';
 import { useAuthStore } from '../store/authStore';
 import type { LoginFormErrors } from '../types/auth';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../types/navigation';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -29,7 +31,7 @@ export const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<LoginFormErrors>({});
 
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList, 'Login'>>();
   const loading = useAuthStore((state) => state.loading);
   const apiError = useAuthStore((state) => state.error);
   const login = useAuthStore((state) => state.login);
@@ -93,7 +95,7 @@ export const LoginScreen = () => {
           Don't have an account?{' '}
           <Text
             style={{ color: '#007bff', textDecorationLine: 'underline' }}
-            onPress={() => navigation.navigate('Register' as never)}
+            onPress={() => navigation.navigate('Register')}
           >
             Register here.
           </Text>

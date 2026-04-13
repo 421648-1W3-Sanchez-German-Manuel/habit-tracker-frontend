@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { registerUser } from '../services/authService';
+import type { AuthStackParamList } from '../types/navigation';
 
 export const RegisterScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList, 'Register'>>();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -84,7 +86,7 @@ export const RegisterScreen = () => {
       <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Registering...' : 'Register'}</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.linkContainer}>
+      <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.linkContainer}>
         <Text style={styles.link}>Back to Login</Text>
       </TouchableOpacity>
     </View>
