@@ -1,7 +1,7 @@
 import { AxiosError } from 'axios';
 import { httpClient } from './httpClient';
 import { ApiError } from '../types/api';
-import type { LoginRequest, LoginResponse } from '../types/auth';
+import type { LoginRequest, LoginResponse, CreateUserRequest } from '../types/auth';
 
 type ErrorResponseBody = {
   message?: string;
@@ -36,4 +36,26 @@ export const authService = {
       throw new ApiError(500, 'Unexpected error during login');
     }
   },
+
+  async registerUser(payload: CreateUserRequest): Promise<void> {
+    try {
+      await httpClient.post('/auth/register', payload);
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as { message?: string; error?: string } | undefined;
+        const message =
+          responseData?.message ||
+          responseData?.error ||
+          (status >= 500
+            ? 'Something went wrong. Please try again later.'
+            : 'Registration failed.');
+        throw new ApiError(status, message);
+      }
+      throw new ApiError(500, 'Unexpected error during registration');
+    }
+  },
 };
+
+// Remove the named export of authService and instead export registerUser directly
+export const { registerUser } = authService;

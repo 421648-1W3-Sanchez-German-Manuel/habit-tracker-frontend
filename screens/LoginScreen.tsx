@@ -4,6 +4,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuthStore } from '../store/authStore';
 import type { LoginFormErrors } from '../types/auth';
+import { useNavigation } from '@react-navigation/native';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -28,6 +29,7 @@ export const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<LoginFormErrors>({});
 
+  const navigation = useNavigation();
   const loading = useAuthStore((state) => state.loading);
   const apiError = useAuthStore((state) => state.error);
   const login = useAuthStore((state) => state.login);
@@ -87,6 +89,15 @@ export const LoginScreen = () => {
         />
 
         <Button title="Sign in" onPress={onSubmit} loading={loading} />
+        <Text style={{ marginTop: 16, textAlign: 'center' }}>
+          Don't have an account?{' '}
+          <Text
+            style={{ color: '#007bff', textDecorationLine: 'underline' }}
+            onPress={() => navigation.navigate('Register' as never)}
+          >
+            Register here.
+          </Text>
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
