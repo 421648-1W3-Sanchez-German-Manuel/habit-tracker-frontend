@@ -1,4 +1,5 @@
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { HabitListItem } from '../components/HabitListItem';
 import type { Habit } from '../types/habit';
 
 interface DefaultHabitsScreenProps {
@@ -60,25 +61,24 @@ export const DefaultHabitsScreen = ({
         const isDisabled = alreadyAdded || isAdding;
 
         return (
-          <View style={[styles.card, alreadyAdded && styles.cardDisabled]}>
-            <View style={styles.cardMain}>
-              <Text style={[styles.habitName, alreadyAdded && styles.habitNameDisabled]}>{item.name}</Text>
-              <Text style={[styles.habitMeta, alreadyAdded && styles.habitMetaDisabled]}>
-                {item.frequency} • {item.type}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => onAddHabit(item)}
-              disabled={isDisabled}
-              style={({ pressed }) => [
-                styles.addButton,
-                isDisabled && styles.addButtonDisabled,
-                pressed && !isDisabled ? styles.pressed : null,
-              ]}
-            >
-              <Text style={styles.addButtonText}>{isAdding ? '...' : '+'}</Text>
-            </Pressable>
-          </View>
+          <HabitListItem
+            habit={item}
+            subdued={alreadyAdded}
+            showTracking={false}
+            trailing={
+              <Pressable
+                onPress={() => onAddHabit(item)}
+                disabled={isDisabled}
+                style={({ pressed }) => [
+                  styles.addButton,
+                  isDisabled && styles.addButtonDisabled,
+                  pressed && !isDisabled ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.addButtonText}>{isAdding ? '...' : '+'}</Text>
+              </Pressable>
+            }
+          />
         );
       }}
       ListEmptyComponent={
@@ -119,42 +119,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#475569',
     textAlign: 'center',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dbe3ee',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardDisabled: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
-  },
-  cardMain: {
-    flex: 1,
-    marginRight: 10,
-  },
-  habitName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  habitNameDisabled: {
-    color: '#94a3b8',
-  },
-  habitMeta: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#64748b',
-    textTransform: 'capitalize',
-  },
-  habitMetaDisabled: {
-    color: '#cbd5e1',
   },
   addButton: {
     width: 36,

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { HabitsScreen } from '../screens/HabitsScreen';
+import { HabitsNavigator } from './HabitsNavigator';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import type { MainTabParamList } from '../types/navigation';
@@ -36,7 +36,7 @@ export const MainTabNavigator = () => {
         },
       })}
     >
-      <Tab.Screen name="Habits" component={HabitsScreen} options={{ headerShown: false }} />
+      <Tab.Screen name="Habits" component={HabitsNavigator} options={{ headerShown: false }} />
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

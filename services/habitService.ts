@@ -1,7 +1,17 @@
 import { AxiosError } from 'axios';
 import { httpClient } from './httpClient';
 import { ApiError } from '../types/api';
-import type { CreateHabitRequest, Habit, UpdateHabitRequest } from '../types/habit';
+import type {
+  CreateHabitLogRequest,
+  CreateHabitRequest,
+  Habit,
+  HabitBase,
+  HabitLogQuery,
+  HabitLog,
+  HabitStreakResponse,
+  SimilarityCheckResult,
+  UpdateHabitRequest,
+} from '../types/habit';
 
 type ErrorResponseBody = {
   message?: string;
@@ -26,11 +36,17 @@ const authHeaders = (token: string) => ({
   },
 });
 
+const withDefaultStreak = (habit: HabitBase): Habit => ({
+  ...habit,
+  currentStreak: 0,
+  lastCompletedAt: null,
+});
+
 export const habitService = {
   async getDefaultHabits(token: string): Promise<Habit[]> {
     try {
-      const response = await httpClient.get<Habit[]>('/habits/defaults', authHeaders(token));
-      return response.data;
+      const response = await httpClient.get<HabitBase[]>('/habits/defaults', authHeaders(token));
+      return response.data.map(withDefaultStreak);
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status ?? 500;
@@ -44,8 +60,8 @@ export const habitService = {
 
   async getUserHabits(userId: string, token: string): Promise<Habit[]> {
     try {
-      const response = await httpClient.get<Habit[]>(`/habits/user/${userId}`, authHeaders(token));
-      return response.data;
+      const response = await httpClient.get<HabitBase[]>(`/habits/user/${userId}`, authHeaders(token));
+      return response.data.map(withDefaultStreak);
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status ?? 500;
@@ -59,8 +75,8 @@ export const habitService = {
 
   async createHabit(payload: CreateHabitRequest, token: string): Promise<Habit> {
     try {
-      const response = await httpClient.post<Habit>('/habits', payload, authHeaders(token));
-      return response.data;
+      const response = await httpClient.post<HabitBase>('/habits', payload, authHeaders(token));
+      return withDefaultStreak(response.data);
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status ?? 500;
@@ -72,14 +88,38 @@ export const habitService = {
     }
   },
 
+  async checkSimilarity(name: string, token: string): Promise<SimilarityCheckResult | null> {
+    try {
+      const response = await httpClient.post<SimilarityCheckResult>(
+        '/habits/check-similarity',
+        { name },
+        authHeaders(token)
+      );
+      return response.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+
+        if (status === 404) {
+          return null;
+        }
+
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while checking habit similarity');
+    }
+  },
+
   async addDefaultHabitToCurrentUser(defaultHabitId: string, token: string): Promise<Habit> {
     try {
-      const response = await httpClient.post<Habit>(
+      const response = await httpClient.post<HabitBase>(
         `/habits/defaults/${defaultHabitId}/users/me`,
         null,
         authHeaders(token)
       );
-      return response.data;
+      return withDefaultStreak(response.data);
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status ?? 500;
@@ -107,8 +147,8 @@ export const habitService = {
 
   async updateHabit(habitId: string, payload: UpdateHabitRequest, token: string): Promise<Habit> {
     try {
-      const response = await httpClient.put<Habit>(`/habits/${habitId}`, payload, authHeaders(token));
-      return response.data;
+      const response = await httpClient.put<HabitBase>(`/habits/${habitId}`, payload, authHeaders(token));
+      return withDefaultStreak(response.data);
     } catch (error) {
       if (error instanceof AxiosError) {
         const status = error.response?.status ?? 500;
@@ -117,6 +157,54 @@ export const habitService = {
       }
 
       throw new ApiError(500, 'Unexpected error while updating habit');
+    }
+  },
+
+  async getHabitsWithStreaks(token: string): Promise<HabitStreakResponse[]> {
+    try {
+      const response = await httpClient.get<HabitStreakResponse[]>('/habits/with-streaks', authHeaders(token));
+      return response.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while fetching habit streaks');
+    }
+  },
+
+  async createHabitLog(payload: CreateHabitLogRequest, token: string): Promise<HabitLog> {
+    try {
+      const response = await httpClient.post<HabitLog>('/logs', payload, authHeaders(token));
+      return response.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while creating habit log');
+    }
+  },
+
+  async getHabitLogs(habitId: string, token: string, query?: HabitLogQuery): Promise<HabitLog[]> {
+    try {
+      const response = await httpClient.get<HabitLog[]>(`/logs/habit/${habitId}`, {
+        ...authHeaders(token),
+        params: query,
+      });
+      return response.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while fetching habit logs');
     }
   },
 };

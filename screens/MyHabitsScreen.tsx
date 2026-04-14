@@ -1,13 +1,23 @@
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Habit } from '../types/habit';
+import { Alert, ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Button } from '../components/Button';
+import { HabitActionMenu } from '../components/HabitActionMenu';
+import { HabitListItem } from '../components/HabitListItem';
+import type { Habit, HabitCompletionMap } from '../types/habit';
 
 interface MyHabitsScreenProps {
   habits: Habit[];
   loading: boolean;
   refreshing: boolean;
   removingHabitIds: string[];
+  completingHabitIds: string[];
+  completedHabitMap: HabitCompletionMap;
   error: string | null;
+  onCreateHabit: () => void;
+  onEditHabit: (habit: Habit) => void;
+  onViewHabitDetails: (habit: Habit) => void;
   onRemoveHabit: (habitId: string) => void;
+  onCompleteHabit: (habit: Habit) => void;
   onRetry: () => void;
 }
 
@@ -16,8 +26,14 @@ export const MyHabitsScreen = ({
   loading,
   refreshing,
   removingHabitIds,
+  completingHabitIds,
+  completedHabitMap,
   error,
+  onCreateHabit,
+  onEditHabit,
+  onViewHabitDetails,
   onRemoveHabit,
+  onCompleteHabit,
   onRetry,
 }: MyHabitsScreenProps) => {
   if (loading && habits.length === 0) {
@@ -42,46 +58,85 @@ export const MyHabitsScreen = ({
   }
 
   return (
-    <FlatList
-      data={habits}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={habits.length === 0 ? styles.emptyContainer : styles.listContent}
-      onRefresh={onRetry}
-      refreshing={refreshing}
-      renderItem={({ item }) => {
-        const isRemoving = removingHabitIds.includes(item.id);
+    <View style={styles.screen}>
+      <FlatList
+        data={habits}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={habits.length === 0 ? styles.emptyContainer : styles.listContent}
+        onRefresh={onRetry}
+        refreshing={refreshing}
+        renderItem={({ item }) => {
+          const isRemoving = removingHabitIds.includes(item.id);
+          const isCompleting = completingHabitIds.includes(item.id);
+          const isCompleted = !!completedHabitMap[item.id];
+          const canEdit = !item.sourceDefaultHabitId;
+          const isDefaultDerived = !!item.sourceDefaultHabitId;
 
-        return (
-          <View style={styles.card}>
-            <View style={styles.cardMain}>
-              <Text style={styles.habitName}>{item.name}</Text>
-              <Text style={styles.habitMeta}>{item.frequency} • {item.type}</Text>
+          const handleDelete = () => {
+            const title = isDefaultDerived ? 'Remove from My Habits' : 'Delete habit';
+            const message = isDefaultDerived
+              ? `Remove "${item.name}" from My Habits?\n\nThis habit will still be available in Default Habits.`
+              : `Delete "${item.name}" permanently?`;
+
+            Alert.alert(title, message, [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: isDefaultDerived ? 'Remove' : 'Delete',
+                style: 'destructive',
+                onPress: () => onRemoveHabit(item.id),
+              },
+            ]);
+          };
+
+          return (
+            <HabitListItem
+              habit={item}
+              completed={isCompleted}
+              completionDisabled={isRemoving || isCompleting || isCompleted}
+              onToggleComplete={() => onCompleteHabit(item)}
+              trailing={
+                <HabitActionMenu
+                  habit={item}
+                  canEdit={canEdit}
+                  disabled={isRemoving}
+                  onEdit={onEditHabit}
+                  onViewDetails={onViewHabitDetails}
+                  onDelete={handleDelete}
+                />
+              }
+            />
+          );
+        }}
+        ListEmptyComponent={
+          <View style={styles.centeredContainer}>
+            <Text style={styles.title}>No habits yet</Text>
+            <Text style={styles.subtitle}>Create your first habit to get started.</Text>
+            <View style={styles.emptyAction}>
+              <Button title="Add your first habit" onPress={onCreateHabit} />
             </View>
-            <Pressable
-              onPress={() => onRemoveHabit(item.id)}
-              disabled={isRemoving}
-              style={({ pressed }) => [
-                styles.removeButton,
-                isRemoving && styles.removeButtonDisabled,
-                pressed && !isRemoving ? styles.pressed : null,
-              ]}
-            >
-              <Text style={styles.removeButtonText}>{isRemoving ? '...' : 'Remove'}</Text>
-            </Pressable>
           </View>
-        );
-      }}
-      ListEmptyComponent={
-        <View style={styles.centeredContainer}>
-          <Text style={styles.title}>No habits yet</Text>
-          <Text style={styles.subtitle}>Add one from the Default Habits tab.</Text>
-        </View>
-      }
-    />
+        }
+      />
+
+      {habits.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add habit"
+          onPress={onCreateHabit}
+          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        >
+          <MaterialCommunityIcons name="plus" size={28} color="#ffffff" />
+        </Pressable>
+      ) : null}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
   centeredContainer: {
     flex: 1,
     alignItems: 'center',
@@ -98,6 +153,11 @@ const styles = StyleSheet.create({
   emptyContainer: {
     flexGrow: 1,
   },
+  emptyAction: {
+    width: '100%',
+    marginTop: 20,
+    maxWidth: 280,
+  },
   title: {
     fontSize: 20,
     fontWeight: '700',
@@ -109,49 +169,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#475569',
     textAlign: 'center',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dbe3ee',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardMain: {
-    flex: 1,
-    marginRight: 10,
-  },
-  habitName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  habitMeta: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#64748b',
-    textTransform: 'capitalize',
-  },
-  removeButton: {
-    minWidth: 80,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#be123c',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  removeButtonDisabled: {
-    backgroundColor: '#fb7185',
-  },
-  removeButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
   },
   retryButton: {
     marginTop: 16,
@@ -167,5 +184,25 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0f766e',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  fabPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
   },
 });
