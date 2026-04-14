@@ -24,8 +24,8 @@ export const MainTabNavigator = () => {
         tabBarActiveTintColor: '#0f766e',
         tabBarInactiveTintColor: '#64748b',
         tabBarStyle: {
-          height: 64,
-          paddingBottom: 8,
+          height: 72,
+          paddingBottom: 16,
           paddingTop: 8,
           backgroundColor: '#ffffff',
           borderTopColor: '#e2e8f0',
@@ -36,7 +36,7 @@ export const MainTabNavigator = () => {
         },
       })}
     >
-      <Tab.Screen name="Habits" component={HabitsScreen} />
+      <Tab.Screen name="Habits" component={HabitsScreen} options={{ headerShown: false }} />
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
