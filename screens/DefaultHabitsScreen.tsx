@@ -57,23 +57,26 @@ export const DefaultHabitsScreen = ({
       renderItem={({ item }) => {
         const alreadyAdded = myHabitNames.has(normalizeName(item.name));
         const isAdding = addingHabitIds.includes(item.id);
+        const isDisabled = alreadyAdded || isAdding;
 
         return (
-          <View style={styles.card}>
+          <View style={[styles.card, alreadyAdded && styles.cardDisabled]}>
             <View style={styles.cardMain}>
-              <Text style={styles.habitName}>{item.name}</Text>
-              <Text style={styles.habitMeta}>{item.frequency} • {item.type}</Text>
+              <Text style={[styles.habitName, alreadyAdded && styles.habitNameDisabled]}>{item.name}</Text>
+              <Text style={[styles.habitMeta, alreadyAdded && styles.habitMetaDisabled]}>
+                {item.frequency} • {item.type}
+              </Text>
             </View>
             <Pressable
               onPress={() => onAddHabit(item)}
-              disabled={alreadyAdded || isAdding}
+              disabled={isDisabled}
               style={({ pressed }) => [
                 styles.addButton,
-                (alreadyAdded || isAdding) && styles.addButtonDisabled,
-                pressed && !(alreadyAdded || isAdding) ? styles.pressed : null,
+                isDisabled && styles.addButtonDisabled,
+                pressed && !isDisabled ? styles.pressed : null,
               ]}
             >
-              <Text style={styles.addButtonText}>{alreadyAdded ? 'Added' : isAdding ? '...' : '+'}</Text>
+              <Text style={styles.addButtonText}>{isAdding ? '...' : '+'}</Text>
             </Pressable>
           </View>
         );
@@ -128,6 +131,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  cardDisabled: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+  },
   cardMain: {
     flex: 1,
     marginRight: 10,
@@ -137,11 +144,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  habitNameDisabled: {
+    color: '#94a3b8',
+  },
   habitMeta: {
     marginTop: 4,
     fontSize: 12,
     color: '#64748b',
     textTransform: 'capitalize',
+  },
+  habitMetaDisabled: {
+    color: '#cbd5e1',
   },
   addButton: {
     width: 36,

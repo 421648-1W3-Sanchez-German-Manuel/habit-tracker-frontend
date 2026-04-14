@@ -119,22 +119,21 @@ export const HabitsScreen = () => {
       setAddingHabitIds((prev) => [...prev, habit.id]);
 
       try {
-        const userId = await resolveUserId();
-        if (!userId) {
-          throw new Error('Could not identify the current user.');
-        }
+        const addedHabit = await habitService.addDefaultHabitToCurrentUser(habit.id, token);
 
-        const createdHabit = await habitService.createHabit(
-          {
-            userId,
-            name: habit.name,
-            type: habit.type,
-            frequency: habit.frequency,
-          },
-          token
-        );
+        setMyHabits((prev) => {
+          const normalizedAddedName = normalizeName(addedHabit.name);
+          const alreadyExists = prev.some(
+            (existing) =>
+              existing.id === addedHabit.id || normalizeName(existing.name) === normalizedAddedName
+          );
 
-        setMyHabits((prev) => [createdHabit, ...prev]);
+          if (alreadyExists) {
+            return prev;
+          }
+
+          return [addedHabit, ...prev];
+        });
       } catch (addError) {
         const message = isApiError(addError)
           ? addError.message
@@ -144,7 +143,7 @@ export const HabitsScreen = () => {
         setAddingHabitIds((prev) => prev.filter((habitId) => habitId !== habit.id));
       }
     },
-    [myHabitNames, resolveUserId, token]
+    [myHabitNames, token]
   );
 
   const handleRemoveMyHabit = useCallback(

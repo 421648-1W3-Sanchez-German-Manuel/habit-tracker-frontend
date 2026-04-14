@@ -72,6 +72,25 @@ export const habitService = {
     }
   },
 
+  async addDefaultHabitToCurrentUser(defaultHabitId: string, token: string): Promise<Habit> {
+    try {
+      const response = await httpClient.post<Habit>(
+        `/habits/defaults/${defaultHabitId}/users/me`,
+        null,
+        authHeaders(token)
+      );
+      return response.data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while adding default habit');
+    }
+  },
+
   async deleteHabit(habitId: string, token: string): Promise<void> {
     try {
       await httpClient.delete(`/habits/${habitId}`, authHeaders(token));
