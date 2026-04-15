@@ -207,4 +207,35 @@ export const habitService = {
       throw new ApiError(500, 'Unexpected error while fetching habit logs');
     }
   },
+
+  async deleteHabitLogs(habitId: string, token: string, query: HabitLogQuery): Promise<void> {
+    try {
+      await httpClient.delete(`/logs/habit/${habitId}`, {
+        ...authHeaders(token),
+        params: query,
+      });
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while deleting habit logs');
+    }
+  },
+
+  async deleteHabitLogById(logId: string, token: string): Promise<void> {
+    try {
+      await httpClient.delete(`/logs/${logId}`, authHeaders(token));
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const status = error.response?.status ?? 500;
+        const responseData = error.response?.data as ErrorResponseBody | undefined;
+        throw new ApiError(status, getErrorMessage(status, responseData));
+      }
+
+      throw new ApiError(500, 'Unexpected error while deleting habit log');
+    }
+  },
 };

@@ -5,9 +5,15 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { habitService } from '../services/habitService';
+import {
+  buildLogsByHabitId,
+  getCurrentPeriodLog,
+  getTodayLocalDate,
+  isHabitCompleted,
+} from '../services/completionService';
 import { useAuthStore } from '../store/authStore';
 import { isApiError } from '../types/api';
-import type { Habit, HabitCompletionMap, HabitStreakResponse } from '../types/habit';
+import type { Habit, HabitLog, HabitLogsByHabitId, HabitStreakResponse } from '../types/habit';
 import type { HabitsStackParamList, HabitsTopTabParamList } from '../types/navigation';
 import { DefaultHabitsScreen } from './DefaultHabitsScreen';
 import { MyHabitsScreen } from './MyHabitsScreen';
@@ -16,44 +22,11 @@ const Tab = createMaterialTopTabNavigator<HabitsTopTabParamList>();
 
 const normalizeName = (value: string) => value.trim().toLowerCase();
 
-const getTodayLocalDate = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const getPeriodStartDate = (frequency: Habit['frequency'], date: Date) => {
-  const start = new Date(date);
-
-  if (frequency === 'DAILY') {
-    return start;
-  }
-
-  if (frequency === 'WEEKLY') {
-    const day = start.getDay();
-    const shift = day === 0 ? -6 : 1 - day;
-    start.setDate(start.getDate() + shift);
-    return start;
-  }
-
-  start.setDate(1);
-  return start;
-};
-
 const toLocalDateString = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-};
-
-const getCurrentPeriodQuery = (frequency: Habit['frequency']) => {
-  const today = new Date();
-  const from = toLocalDateString(getPeriodStartDate(frequency, today));
-  const to = toLocalDateString(today);
-  return { from, to };
 };
 
 const getWeekStartDate = (date: Date) => {
@@ -139,7 +112,11 @@ const getDefaultCompletionValue = (habitType: Habit['type']): unknown => {
   }
 };
 
-const isDuplicateCompletionError = (message: string) => {
+const isDuplicateCompletionError = (status: number | undefined, message: string) => {
+  if (status === 409) {
+    return true;
+  }
+
   const normalized = message.toLowerCase();
   return (
     normalized.includes('duplicate') ||
@@ -162,6 +139,11 @@ const applyStreaks = (habits: Habit[], streaks: HabitStreakResponse[]): Habit[] 
   });
 };
 
+const mergeHabitLog = (logs: HabitLog[], log: HabitLog): HabitLog[] => {
+  const withoutDuplicatedLog = logs.filter((entry) => entry.id !== log.id);
+  return [log, ...withoutDuplicatedLog];
+};
+
 export const HabitsScreen = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<HabitsStackParamList, 'HabitsHome'>>();
@@ -180,42 +162,85 @@ export const HabitsScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [addingHabitIds, setAddingHabitIds] = useState<string[]>([]);
   const [removingHabitIds, setRemovingHabitIds] = useState<string[]>([]);
-  const [completedHabitMap, setCompletedHabitMap] = useState<HabitCompletionMap>({});
+  const [logsByHabitId, setLogsByHabitId] = useState<HabitLogsByHabitId>({});
+  const [logsLoaded, setLogsLoaded] = useState<boolean>(false);
   const [completingHabitIds, setCompletingHabitIds] = useState<string[]>([]);
 
-  const fetchCompletionState = useCallback(
-    async (habits: Habit[]): Promise<HabitCompletionMap> => {
-      if (!token || habits.length === 0) {
-        return {};
+  useEffect(() => {
+    console.log('[HabitsScreen] logsByHabitId', logsByHabitId);
+  }, [logsByHabitId]);
+
+  useEffect(() => {
+    if (!logsLoaded) {
+      return;
+    }
+
+    myHabits.forEach((habit) => {
+      console.log('[HabitsScreen] isHabitCompleted', {
+        habitId: habit.id,
+        completed: isHabitCompleted(habit, logsByHabitId[habit.id] ?? []),
+      });
+    });
+  }, [logsByHabitId, logsLoaded, myHabits]);
+
+  const refreshLogsForHabits = useCallback(
+    async (habits: Habit[], showLoader = false) => {
+      if (!token) {
+        setLogsByHabitId({});
+        setLogsLoaded(true);
+        return;
       }
 
-      const completionEntries = await Promise.all(
-        habits.map(async (habit) => {
-          const logs = await habitService.getHabitLogs(habit.id, token, getCurrentPeriodQuery(habit.frequency));
-          return [habit.id, logs.length > 0] as const;
-        })
-      );
+      if (showLoader) {
+        setLogsLoaded(false);
+      }
 
-      return Object.fromEntries(completionEntries);
-    },
-    [token]
-  );
-
-  const refreshCompletionState = useCallback(
-    async (habits: Habit[]) => {
       if (habits.length === 0) {
-        setCompletedHabitMap({});
+        setLogsByHabitId({});
+        setLogsLoaded(true);
         return;
       }
 
       try {
-        const completionState = await fetchCompletionState(habits);
-        setCompletedHabitMap(completionState);
+        const nextLogsByHabitId = await buildLogsByHabitId(habits, token, habitService.getHabitLogs);
+        setLogsByHabitId(nextLogsByHabitId);
       } catch {
-        setCompletedHabitMap(Object.fromEntries(habits.map((habit) => [habit.id, false])));
+        setLogsByHabitId((previous) => {
+          const next: HabitLogsByHabitId = {};
+          for (const habit of habits) {
+            next[habit.id] = previous[habit.id] ?? [];
+          }
+          return next;
+        });
+      } finally {
+        setLogsLoaded(true);
       }
     },
-    [fetchCompletionState]
+    [token]
+  );
+
+  const refreshLogsForHabit = useCallback(
+    async (habit: Habit) => {
+      if (!token) {
+        return;
+      }
+
+      try {
+        const logs = await habitService.getHabitLogs(habit.id, token);
+        setLogsByHabitId((previous) => ({
+          ...previous,
+          [habit.id]: logs,
+        }));
+      } catch {
+        // Keep last known logs for this habit if refresh fails.
+      }
+    },
+    [token]
+  );
+
+  const isHabitCompletedForHabit = useCallback(
+    (habit: Habit) => isHabitCompleted(habit, logsByHabitId[habit.id] ?? []),
+    [logsByHabitId]
   );
 
   const resolveUserId = useCallback(async (): Promise<string | null> => {
@@ -232,7 +257,8 @@ export const HabitsScreen = () => {
       if (!token) {
         setDefaultHabits([]);
         setMyHabits([]);
-        setCompletedHabitMap({});
+        setLogsByHabitId({});
+        setLogsLoaded(true);
         setLoading(false);
         setRefreshing(false);
         return;
@@ -243,6 +269,8 @@ export const HabitsScreen = () => {
       } else {
         setLoading(true);
       }
+
+      setLogsLoaded(false);
 
       setError(null);
 
@@ -265,18 +293,19 @@ export const HabitsScreen = () => {
         setDefaultHabits(nextDefaultHabits);
         setMyHabits(nextMyHabits);
         lastRolloverKeyRef.current = getRolloverKey(nextMyHabits);
-        await refreshCompletionState(nextMyHabits);
+        await refreshLogsForHabits(nextMyHabits, true);
       } catch (fetchError) {
         const message = isApiError(fetchError)
           ? fetchError.message
           : 'Could not load habits. Please try again.';
         setError(message);
+        setLogsLoaded(true);
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [refreshCompletionState, resolveUserId, token]
+    [refreshLogsForHabits, resolveUserId, token]
   );
 
   useEffect(() => {
@@ -287,7 +316,8 @@ export const HabitsScreen = () => {
     if (!token) {
       setDefaultHabits([]);
       setMyHabits([]);
-      setCompletedHabitMap({});
+      setLogsByHabitId({});
+      setLogsLoaded(true);
       setLoading(false);
       setRefreshing(false);
       return;
@@ -340,7 +370,7 @@ export const HabitsScreen = () => {
         }
 
         lastRolloverKeyRef.current = getRolloverKey(myHabits);
-        void refreshCompletionState(myHabits).finally(() => {
+        void refreshLogsForHabits(myHabits).finally(() => {
           scheduleNextRollover();
         });
       }, delayMs);
@@ -356,7 +386,7 @@ export const HabitsScreen = () => {
         rolloverTimerRef.current = null;
       }
     };
-  }, [hasHydrated, myHabits, refreshCompletionState, token]);
+  }, [hasHydrated, myHabits, refreshLogsForHabits, token]);
 
   useEffect(() => {
     if (!hasHydrated || !token) {
@@ -374,13 +404,13 @@ export const HabitsScreen = () => {
       }
 
       lastRolloverKeyRef.current = nextRolloverKey;
-      void refreshCompletionState(myHabits);
+      void refreshLogsForHabits(myHabits);
     });
 
     return () => {
       subscription.remove();
     };
-  }, [hasHydrated, myHabits, refreshCompletionState, token]);
+  }, [hasHydrated, myHabits, refreshLogsForHabits, token]);
 
   const myHabitNames = useMemo(
     () => new Set(myHabits.map((habit) => normalizeName(habit.name))),
@@ -425,7 +455,7 @@ export const HabitsScreen = () => {
       const previousHabits = myHabits;
       setRemovingHabitIds((prev) => [...prev, habitId]);
       setMyHabits((prev) => prev.filter((habit) => habit.id !== habitId));
-      setCompletedHabitMap((prev) => {
+      setLogsByHabitId((prev) => {
         const next = { ...prev };
         delete next[habitId];
         return next;
@@ -447,48 +477,6 @@ export const HabitsScreen = () => {
     [loadHabits, myHabits, token]
   );
 
-  const refreshMyHabitsAfterCompletion = useCallback(async (recentlyCompletedHabitId?: string) => {
-    if (!token) {
-      return;
-    }
-
-    try {
-      const userId = await resolveUserId();
-
-      if (!userId) {
-        return;
-      }
-
-      const [myData, streaks] = await Promise.all([
-        habitService.getUserHabits(userId, token),
-        habitService.getHabitsWithStreaks(token),
-      ]);
-
-      const nextMyHabits = applyStreaks(myData, streaks);
-      setMyHabits(nextMyHabits);
-
-      lastRolloverKeyRef.current = getRolloverKey(nextMyHabits);
-      const completionState = await fetchCompletionState(nextMyHabits);
-      setCompletedHabitMap((previous) => {
-        const mergedState: HabitCompletionMap = { ...completionState };
-
-        for (const habit of nextMyHabits) {
-          if (previous[habit.id]) {
-            mergedState[habit.id] = true;
-          }
-        }
-
-        if (recentlyCompletedHabitId) {
-          mergedState[recentlyCompletedHabitId] = true;
-        }
-
-        return mergedState;
-      });
-    } catch {
-      // Keep optimistic state if background refresh fails.
-    }
-  }, [fetchCompletionState, resolveUserId, token]);
-
   const handleCompleteHabit = useCallback(
     async (habit: Habit) => {
       if (!token) {
@@ -496,60 +484,81 @@ export const HabitsScreen = () => {
       }
 
       const habitId = habit.id;
-      const wasCompleted = !!completedHabitMap[habitId];
+      const habitLogs = logsByHabitId[habitId] ?? [];
+      const currentlyCompleted = isHabitCompleted(habit, habitLogs);
+      const nextCompleted = !currentlyCompleted;
 
-      if (wasCompleted || completingHabitIds.includes(habitId)) {
+      if (completingHabitIds.includes(habitId)) {
         return;
       }
 
       const today = getTodayLocalDate();
 
       setCompletingHabitIds((prev) => [...prev, habitId]);
-      setCompletedHabitMap((prev) => ({ ...prev, [habitId]: true }));
 
       try {
-        await habitService.createHabitLog(
-          {
-            habitId,
-            date: today,
-            value: getDefaultCompletionValue(habit.type),
-          },
-          token
-        );
+        if (nextCompleted) {
+          const createdLog = await habitService.createHabitLog(
+            {
+              habitId,
+              date: today,
+              value: getDefaultCompletionValue(habit.type),
+            },
+            token
+          );
+
+          setLogsByHabitId((prev) => ({
+            ...prev,
+            [habitId]: mergeHabitLog(prev[habitId] ?? [], createdLog),
+          }));
+        } else {
+          const currentPeriodLog = getCurrentPeriodLog(habit, habitLogs);
+
+          if (!currentPeriodLog) {
+            await refreshLogsForHabit(habit);
+            return;
+          }
+
+          await habitService.deleteHabitLogById(currentPeriodLog.id, token);
+          setLogsByHabitId((prev) => ({
+            ...prev,
+            [habitId]: (prev[habitId] ?? []).filter((entry) => entry.id !== currentPeriodLog.id),
+          }));
+        }
 
         setMyHabits((prev) =>
           prev.map((item) =>
             item.id === habitId
               ? {
                   ...item,
-                  lastCompletedAt: today,
+                  lastCompletedAt: nextCompleted ? today : null,
                 }
               : item
           )
         );
-
-        void refreshMyHabitsAfterCompletion(habitId);
       } catch (completeError) {
-        const message = isApiError(completeError)
-          ? completeError.message
-          : 'Could not mark habit as completed. Please try again.';
-        const isDuplicate = isDuplicateCompletionError(message);
-        const friendlyMessage = isDuplicate
-          ? 'This habit is already completed for the current period.'
-          : message;
+        const isDuplicateOnCheck =
+          nextCompleted &&
+          isDuplicateCompletionError(
+            isApiError(completeError) ? completeError.status : undefined,
+            isApiError(completeError) ? completeError.message : ''
+          );
 
-        if (isDuplicate) {
-          setCompletedHabitMap((prev) => ({ ...prev, [habitId]: true }));
+        if (isDuplicateOnCheck) {
+          await refreshLogsForHabit(habit);
         } else {
-          setCompletedHabitMap((prev) => ({ ...prev, [habitId]: wasCompleted }));
+          const message = isApiError(completeError)
+            ? completeError.message
+            : nextCompleted
+              ? 'Could not mark habit as completed. Please try again.'
+              : 'Could not unmark habit. Please try again.';
+          Alert.alert('Could not update habit', message);
         }
-
-        Alert.alert('Could not complete habit', friendlyMessage);
       } finally {
         setCompletingHabitIds((prev) => prev.filter((id) => id !== habitId));
       }
     },
-    [completedHabitMap, completingHabitIds, refreshMyHabitsAfterCompletion, token]
+    [completingHabitIds, logsByHabitId, refreshLogsForHabit, token]
   );
 
   return (
@@ -588,11 +597,12 @@ export const HabitsScreen = () => {
           {() => (
             <MyHabitsScreen
               habits={myHabits}
-              loading={loading}
+              loading={loading || !logsLoaded}
               refreshing={refreshing}
               removingHabitIds={removingHabitIds}
               completingHabitIds={completingHabitIds}
-              completedHabitMap={completedHabitMap}
+              logsByHabitId={logsByHabitId}
+              isHabitCompleted={isHabitCompletedForHabit}
               error={error}
               onCreateHabit={() => {
                   navigation.navigate('CreateHabit', { mode: 'create' });

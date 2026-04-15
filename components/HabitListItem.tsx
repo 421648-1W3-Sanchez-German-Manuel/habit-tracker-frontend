@@ -24,7 +24,7 @@ export const HabitListItem = ({
 }: HabitListItemProps) => {
 
   return (
-    <View style={[styles.card, subdued && styles.cardDisabled]}>
+    <View style={[styles.card, completed && styles.cardCompleted, subdued && styles.cardDisabled]}>
       {showTracking ? (
         <Pressable
           accessibilityRole="checkbox"
@@ -47,8 +47,10 @@ export const HabitListItem = ({
         </Pressable>
       ) : null}
       <View style={styles.cardMain}>
-        <Text style={[styles.habitName, subdued && styles.habitNameDisabled]}>{habit.name}</Text>
-        <Text style={[styles.habitMeta, subdued && styles.habitMetaDisabled]}>
+        <Text style={[styles.habitName, completed && styles.habitNameCompleted, subdued && styles.habitNameDisabled]}>
+          {habit.name}
+        </Text>
+        <Text style={[styles.habitMeta, completed && styles.habitMetaCompleted, subdued && styles.habitMetaDisabled]}>
           {habit.frequency} • {habit.type}
         </Text>
       </View>
@@ -83,6 +85,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderColor: '#e2e8f0',
   },
+  cardCompleted: {
+    backgroundColor: '#ecfdf3',
+    borderColor: '#bbf7d0',
+  },
   cardMain: {
     flex: 1,
     marginRight: 10,
@@ -111,6 +117,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  habitNameCompleted: {
+    color: '#166534',
+  },
   habitNameDisabled: {
     color: '#94a3b8',
   },
@@ -119,6 +128,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     textTransform: 'capitalize',
+  },
+  habitMetaCompleted: {
+    color: '#4d7c0f',
   },
   streakSlot: {
     minWidth: 36,

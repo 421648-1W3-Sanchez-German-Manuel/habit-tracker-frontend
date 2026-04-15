@@ -41,7 +41,7 @@ export interface HabitLogQuery {
   to?: string;
 }
 
-export type HabitCompletionMap = Record<string, boolean>;
+export type HabitLogsByHabitId = Record<string, HabitLog[]>;
 
 export interface SimilarityCheckResult {
   habit: HabitBase;

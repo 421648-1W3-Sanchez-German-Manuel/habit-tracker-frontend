@@ -3,7 +3,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { HabitActionMenu } from '../components/HabitActionMenu';
 import { HabitListItem } from '../components/HabitListItem';
-import type { Habit, HabitCompletionMap } from '../types/habit';
+import type { Habit, HabitLogsByHabitId } from '../types/habit';
 
 interface MyHabitsScreenProps {
   habits: Habit[];
@@ -11,7 +11,8 @@ interface MyHabitsScreenProps {
   refreshing: boolean;
   removingHabitIds: string[];
   completingHabitIds: string[];
-  completedHabitMap: HabitCompletionMap;
+  logsByHabitId: HabitLogsByHabitId;
+  isHabitCompleted: (habit: Habit) => boolean;
   error: string | null;
   onCreateHabit: () => void;
   onEditHabit: (habit: Habit) => void;
@@ -27,7 +28,8 @@ export const MyHabitsScreen = ({
   refreshing,
   removingHabitIds,
   completingHabitIds,
-  completedHabitMap,
+  logsByHabitId,
+  isHabitCompleted,
   error,
   onCreateHabit,
   onEditHabit,
@@ -68,7 +70,8 @@ export const MyHabitsScreen = ({
         renderItem={({ item }) => {
           const isRemoving = removingHabitIds.includes(item.id);
           const isCompleting = completingHabitIds.includes(item.id);
-          const isCompleted = !!completedHabitMap[item.id];
+          const hasLogs = !!logsByHabitId[item.id];
+          const isCompleted = hasLogs ? isHabitCompleted(item) : false;
           const canEdit = !item.sourceDefaultHabitId;
           const isDefaultDerived = !!item.sourceDefaultHabitId;
 
@@ -92,7 +95,7 @@ export const MyHabitsScreen = ({
             <HabitListItem
               habit={item}
               completed={isCompleted}
-              completionDisabled={isRemoving || isCompleting || isCompleted}
+              completionDisabled={isRemoving || isCompleting}
               onToggleComplete={() => onCompleteHabit(item)}
               trailing={
                 <HabitActionMenu
